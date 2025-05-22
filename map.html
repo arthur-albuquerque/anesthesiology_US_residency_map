@@ -116,17 +116,16 @@
             maxZoom: 18,
         }).addTo(map);
 
-        // Load and parse the CSV file using loadFileData
-        var csvData = loadFileData("Anestesio191c019ed4cb80eb994ecad07008b98e_all_geocodio_ade5bbbb0dbfbc2bd8afb25ef89e43a752e5909a.csv");
-
-        Papa.parse(csvData, {
+        // Load data
+        Papa.parse('Anestesio191c019ed4cb80eb994ecad07008b98e_all_geocodio_ade5bbbb0dbfbc2bd8afb25ef89e43a752e5909a.csv', {
+            download: true,
             header: true,
             skipEmptyLines: true,
             transformHeader: (header) => header.trim().replace(/^"|"$/g, ''),
             transform: (value, header) => value.trim().replace(/^"|"$/g, ''),
             complete: (results) => {
                 hospitalData = results.data;
-                displayMarkers(hospitalData);
+                displayCircles(hospitalData);
             },
             error: (err) => console.error("Error parsing CSV:", err)
         });

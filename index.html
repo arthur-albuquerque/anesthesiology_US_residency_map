@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Hospital Residency Map with Filters</title>
+    <title>Anesthesiology Residency - 2025</title>
     <!-- Include Leaflet CSS and JS from CDN -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -36,10 +36,7 @@
         .leaflet-popup-tip {
             background-color: #fff;
         }
-        .highlight {
-            color: #ff4500; /* Orange-red for highlighting */
-        }
-        #filter-form {
+        #filter-form, #color-form {
             margin-bottom: 20px;
             padding: 15px;
             background-color: #fff;
@@ -50,17 +47,17 @@
             gap: 15px;
             align-items: center;
         }
-        #filter-form label {
+        #filter-form label, #color-form label {
             margin-right: 5px;
             font-weight: bold;
         }
-        #filter-form input {
+        #filter-form input, #color-form select {
             padding: 5px;
             border: 1px solid #ccc;
             border-radius: 4px;
             width: 100px;
         }
-        #filter-form button {
+        #filter-form button, #color-form button {
             padding: 8px 15px;
             background-color: #4CAF50;
             color: white;
@@ -68,7 +65,7 @@
             border-radius: 4px;
             cursor: pointer;
         }
-        #filter-form button:hover {
+        #filter-form button:hover, #color-form button:hover {
             background-color: #45a049;
         }
         #filter-form #clear-filters {
@@ -77,10 +74,42 @@
         #filter-form #clear-filters:hover {
             background-color: #da190b;
         }
+        #legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            width: 200px;
+        }
+        #legend p {
+            margin: 5px 0;
+            font-size: 12px;
+        }
+        .gradient-bar {
+            width: 100%;
+            height: 20px;
+            background: linear-gradient(to right, #3B2667, #5C2E91, #BC3754, #F07F4F, #F8C570);
+        }
+        .legend-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+        .color-box {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
     </style>
 </head>
 <body>
-    <h1>Hospital Residency Options with Filters</h1>
+    <h1>Anesthesiology Residency - 2025</h1>
     <div id="filter-form">
         <div>
             <label for="step2ck-filter">Step 2CK Min (≥):</label>
@@ -101,14 +130,39 @@
         <button onclick="applyFilters()">Apply Filters</button>
         <button id="clear-filters" onclick="clearFilters()">Clear Filters</button>
     </div>
+    <div id="color-form">
+        <div>
+            <label for="color-field">Color By:</label>
+            <select id="color-field" onchange="updateColors()">
+                <option value="IMG">IMG</option>
+                <option value="Step 2CK min">Step 2CK Min</option>
+                <option value="Female">Female Residents</option>
+                <option value="wage PGY1">Wage PGY1</option>
+            </select>
+        </div>
+    </div>
     <div id="map"></div>
+    <div id="legend">
+        <p><strong id="legend-title">IMG Legend</strong></p>
+        <div class="gradient-bar"></div>
+        <div class="legend-labels" id="legend-range">
+            <span id="min-value">0</span>
+            <span id="max-value">86</span>
+        </div>
+        <p><span class="color-box" style="background-color: #808080;"></span> N/A</p>
+    </div>
 
     <script>
         // Initialize the map, centered on the US
         var map = L.map('map').setView([39.8283, -98.5795], 4);
-        var highlightedMarker = null;
         var markers = {};
         var hospitalData = [];
+        var fieldRanges = {
+            'IMG': { min: 0, max: 86 },
+            'Step 2CK min': { min: 0, max: 0 },
+            'Female': { min: 0, max: 0 },
+            'wage PGY1': { min: 0, max: 0 }
+        };
 
         // Add OpenStreetMap tiles
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -117,28 +171,97 @@
         }).addTo(map);
 
         // Load and parse the CSV file
-        Papa.parse('https://raw.githubusercontent.com/arthur-albuquerque/anesthesiology_US_residency_map/refs/heads/main/data.csv', {
-    download: true,
-    header: true,
-    skipEmptyLines: true,
-    transformHeader: (header) => header.trim().replace(/^"|"$/g, ''),
-    transform: (value, header) => value.trim().replace(/^"|"$/g, ''),
-    complete: (results) => {
-        console.log("CSV loaded successfully:", results.data);
-        hospitalData = results.data;
-        displayMarkers(hospitalData);
-    },
-    error: (err) => {
-        console.error("Error parsing CSV:", err);
-        alert("Failed to load CSV data. Check the console for details.");
-    }
-});
+        Papa.parse('https://raw.githubusercontent.com/arthur-albuquerque/arthur-albuquerque.github.io/main/data.csv', {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            transformHeader: (header) => header.trim().replace(/^"|"$/g, ''),
+            transform: (value, header) => value.trim().replace(/^"|"$/g, ''),
+            complete: (results) => {
+                console.log("CSV loaded successfully:", results.data);
+                hospitalData = results.data;
+
+                // Calculate min and max for each field
+                hospitalData.forEach(hospital => {
+                    ['IMG', 'Step 2CK min', 'Female', 'wage PGY1'].forEach(field => {
+                        var value = parseFloat(hospital[field]);
+                        if (!isNA(value)) {
+                            if (value < fieldRanges[field].min) fieldRanges[field].min = value;
+                            if (value > fieldRanges[field].max) fieldRanges[field].max = value;
+                        }
+                    });
+                });
+
+                displayMarkers(hospitalData);
+                updateLegend();
+            },
+            error: (err) => {
+                console.error("Error parsing CSV:", err);
+                alert("Failed to load CSV data. Check the console for details.");
+            }
+        });
+
+        // Function to determine if a value is N/A
+        function isNA(value) {
+            return value === '' || value === 'N/A' || value === null || value === undefined;
+        }
+
+        // Function to interpolate between two colors
+        function interpolateColor(color1, color2, factor) {
+            var result = color1.slice();
+            for (var i = 0; i < 3; i++) {
+                result[i] = Math.round(result[i] + factor * (color2[i] - result[i]));
+            }
+            return `rgb(${result[0]}, ${result[1]}, ${result[2]})`;
+        }
+
+        // Function to convert hex to RGB
+        function hexToRgb(hex) {
+            var bigint = parseInt(hex.replace('#', ''), 16);
+            return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
+        }
+
+        // Define the volcano palette color stops
+        var colorStops = [
+            { value: 0, color: hexToRgb('#3B2667') },   // Deep purple
+            { value: 0.25, color: hexToRgb('#5C2E91') }, // Blue-purple
+            { value: 0.5, color: hexToRgb('#BC3754') },  // Red
+            { value: 0.75, color: hexToRgb('#F07F4F') }, // Orange
+            { value: 1, color: hexToRgb('#F8C570') }     // Yellow
+        ];
+
+        // Function to get color based on value
+        function getColor(value, field) {
+            if (isNA(value)) return '#808080'; // Gray for N/A
+            var min = fieldRanges[field].min;
+            var max = fieldRanges[field].max;
+            var normalized = (parseFloat(value) - min) / (max - min);
+            normalized = Math.max(0, Math.min(1, normalized)); // Clamp to 0-1
+
+            for (var i = 0; i < colorStops.length - 1; i++) {
+                if (normalized <= colorStops[i + 1].value) {
+                    var factor = (normalized - colorStops[i].value) / (colorStops[i + 1].value - colorStops[i].value);
+                    return interpolateColor(colorStops[i].color, colorStops[i + 1].color, factor);
+                }
+            }
+            return interpolateColor(colorStops[colorStops.length - 2].color, colorStops[colorStops.length - 1].color, 1);
+        }
+
+        // Function to get marker icon URL based on color
+        function getMarkerIconUrl(color) {
+            if (color === '#808080') {
+                return 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png';
+            }
+            return 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
+        }
 
         // Function to display markers based on the provided data
-        function displayMarkers(hospitals) {
+        function displayMarkers(hospitals, activeFilter = null) {
             // Clear existing markers
             Object.values(markers).forEach(marker => map.removeLayer(marker));
             markers = {};
+
+            var colorField = document.getElementById('color-field').value;
 
             hospitals.forEach(function(hospital) {
                 var lat = parseFloat(hospital['Geocodio Latitude']);
@@ -150,13 +273,45 @@
                                        `Step 2CK Min: ${hospital['Step 2CK min'] || 'N/A'}<br>` +
                                        `# IMG: ${hospital.IMG || 'N/A'}<br>` +
                                        `Female Residents: ${hospital.Female || 'N/A'}<br>` +
-                                       `Wage PGY1: $${hospital['wage PGY1'] || 'N/A'}<br>` +
-                                       `<button onclick="highlightLocation('${hospital.Program}', [${lat}, ${lng}])">Highlight Location</button>`;
+                                       `Wage PGY1: $${hospital['wage PGY1'] || 'N/A'}<br>`;
 
-                    var marker = L.marker([lat, lng])
+                    // Determine marker color based on N/A status for the active filter (if any)
+                    var markerColor = '#1f77b4'; // Default blue
+                    if (activeFilter) {
+                        var fieldValue = hospital[activeFilter.field];
+                        if (isNA(fieldValue)) {
+                            markerColor = '#808080'; // Gray for N/A in filter
+                        }
+                    }
+
+                    // Override with Volcano palette if no active filter or if filter passes
+                    if (!activeFilter || !isNA(hospital[activeFilter.field])) {
+                        markerColor = getColor(hospital[colorField], colorField);
+                    }
+
+                    var markerIcon = L.icon({
+                        iconUrl: getMarkerIconUrl(markerColor),
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34]
+                    });
+
+                    var marker = L.marker([lat, lng], { icon: markerIcon })
                         .addTo(map)
                         .bindPopup(popupContent)
                         .bindTooltip(hospital.Program, { permanent: false, direction: 'top' });
+
+                    // If using a Volcano palette color, set a custom icon with the color
+                    if (markerColor !== '#808080' && markerColor !== '#1f77b4') {
+                        marker.setIcon(L.divIcon({
+                            className: 'custom-marker',
+                            html: `<div style="background-color: ${markerColor}; width: 25px; height: 41px; border-radius: 50% 50% 0 0; transform: rotate(45deg);"></div>`,
+                            iconSize: [25, 41],
+                            iconAnchor: [12, 41],
+                            popupAnchor: [1, -34]
+                        }));
+                    }
+
                     markers[hospital.Program] = marker;
                 }
             });
@@ -164,24 +319,39 @@
 
         // Function to apply filters
         function applyFilters() {
-            var step2ckFilter = parseFloat(document.getElementById('step2ck-filter').value) || -Infinity;
-            var imgFilter = parseFloat(document.getElementById('img-filter').value) || -Infinity;
-            var femaleFilter = parseFloat(document.getElementById('female-filter').value) || -Infinity;
-            var wageFilter = parseFloat(document.getElementById('wage-filter').value) || -Infinity;
+            var step2ckFilter = parseFloat(document.getElementById('step2ck-filter').value);
+            var imgFilter = parseFloat(document.getElementById('img-filter').value);
+            var femaleFilter = parseFloat(document.getElementById('female-filter').value);
+            var wageFilter = parseFloat(document.getElementById('wage-filter').value);
 
+            // Determine the active filter field (use the first non-empty filter)
+            var activeFilter = null;
+            if (!isNaN(step2ckFilter)) {
+                activeFilter = { field: 'Step 2CK min', value: step2ckFilter };
+            } else if (!isNaN(imgFilter)) {
+                activeFilter = { field: 'IMG', value: imgFilter };
+            } else if (!isNaN(femaleFilter)) {
+                activeFilter = { field: 'Female', value: femaleFilter };
+            } else if (!isNaN(wageFilter)) {
+                activeFilter = { field: 'wage PGY1', value: wageFilter };
+            }
+
+            // Filter hospitals, but keep those with N/A
             var filteredHospitals = hospitalData.filter(hospital => {
-                var step2ck = parseFloat(hospital['Step 2CK min']) || -Infinity;
-                var img = parseFloat(hospital.IMG) || -Infinity;
-                var female = parseFloat(hospital.Female) || -Infinity;
-                var wage = parseFloat(hospital['wage PGY1']) || -Infinity;
+                var step2ck = isNA(hospital['Step 2CK min']) ? null : parseFloat(hospital['Step 2CK min']);
+                var img = isNA(hospital.IMG) ? null : parseFloat(hospital.IMG);
+                var female = isNA(hospital.Female) ? null : parseFloat(hospital.Female);
+                var wage = isNA(hospital['wage PGY1']) ? null : parseFloat(hospital['wage PGY1']);
 
-                return step2ck >= step2ckFilter &&
-                       img >= imgFilter &&
-                       female >= femaleFilter &&
-                       wage >= wageFilter;
+                var passesStep2ck = isNaN(step2ckFilter) || step2ck === null || step2ck >= step2ckFilter;
+                var passesImg = isNaN(imgFilter) || img === null || img >= imgFilter;
+                var passesFemale = isNaN(femaleFilter) || female === null || female >= femaleFilter;
+                var passesWage = isNaN(wageFilter) || wage === null || wage >= wageFilter;
+
+                return passesStep2ck && passesImg && passesFemale && passesWage;
             });
 
-            displayMarkers(filteredHospitals);
+            displayMarkers(filteredHospitals, activeFilter);
         }
 
         // Function to clear filters
@@ -193,27 +363,19 @@
             displayMarkers(hospitalData);
         }
 
-        // Function to highlight the selected location
-        window.highlightLocation = function(program, coords) {
-            if (highlightedMarker) {
-                highlightedMarker.setIcon(L.icon({
-                    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-                    iconSize: [25, 41],
-                    iconAnchor: [12, 41],
-                    popupAnchor: [1, -34]
-                }));
-            }
-            highlightedMarker = markers[program];
-            if (highlightedMarker) {
-                highlightedMarker.setIcon(L.icon({
-                    iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-                    iconSize: [25, 41],
-                    iconAnchor: [12, 41],
-                    popupAnchor: [1, -34]
-                }));
-                map.setView(coords, 12); // Zoom to location
-            }
-        };
+        // Function to update colors based on selected field
+        function updateColors() {
+            updateLegend();
+            applyFilters(); // Reapply filters to update colors
+        }
+
+        // Function to update the legend
+        function updateLegend() {
+            var colorField = document.getElementById('color-field').value;
+            document.getElementById('legend-title').textContent = `${colorField} Legend`;
+            document.getElementById('min-value').textContent = fieldRanges[colorField].min;
+            document.getElementById('max-value').textContent = fieldRanges[colorField].max;
+        }
     </script>
 </body>
 </html>

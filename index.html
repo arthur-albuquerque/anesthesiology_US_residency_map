@@ -116,30 +116,22 @@
             maxZoom: 18,
         }).addTo(map);
 
-        // Load and parse the CSV file using loadFileData
+        // Load and parse the CSV file
         Papa.parse('data.csv', {
-             download: true,
-             header: true,
-             skipEmptyLines: true,
-             transformHeader: (header) => header.trim().replace(/^"|"$/g, ''),
-             transform: (value, header) => value.trim().replace(/^"|"$/g, ''),
-             complete: (results) => {
-                 hospitalData = results.data;
-                 displayCircles(hospitalData);
-             },
-             error: (err) => console.error("Error parsing CSV:", err)
-         });
-
-        Papa.parse(csvData, {
+            download: true,
             header: true,
             skipEmptyLines: true,
             transformHeader: (header) => header.trim().replace(/^"|"$/g, ''),
             transform: (value, header) => value.trim().replace(/^"|"$/g, ''),
             complete: (results) => {
+                console.log("CSV loaded successfully:", results.data); // Debug log
                 hospitalData = results.data;
                 displayMarkers(hospitalData);
             },
-            error: (err) => console.error("Error parsing CSV:", err)
+            error: (err) => {
+                console.error("Error parsing CSV:", err);
+                alert("Failed to load CSV data. Check the console for details.");
+            }
         });
 
         // Function to display markers based on the provided data

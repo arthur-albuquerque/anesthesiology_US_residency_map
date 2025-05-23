@@ -117,22 +117,22 @@
         }).addTo(map);
 
         // Load and parse the CSV file
-        Papa.parse('data.csv', {
-            download: true,
-            header: true,
-            skipEmptyLines: true,
-            transformHeader: (header) => header.trim().replace(/^"|"$/g, ''),
-            transform: (value, header) => value.trim().replace(/^"|"$/g, ''),
-            complete: (results) => {
-                console.log("CSV loaded successfully:", results.data); // Debug log
-                hospitalData = results.data;
-                displayMarkers(hospitalData);
-            },
-            error: (err) => {
-                console.error("Error parsing CSV:", err);
-                alert("Failed to load CSV data. Check the console for details.");
-            }
-        });
+        Papa.parse('https://raw.githubusercontent.com/arthur-albuquerque/anesthesiology_US_residency_map/refs/heads/main/data.csv', {
+    download: true,
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (header) => header.trim().replace(/^"|"$/g, ''),
+    transform: (value, header) => value.trim().replace(/^"|"$/g, ''),
+    complete: (results) => {
+        console.log("CSV loaded successfully:", results.data);
+        hospitalData = results.data;
+        displayMarkers(hospitalData);
+    },
+    error: (err) => {
+        console.error("Error parsing CSV:", err);
+        alert("Failed to load CSV data. Check the console for details.");
+    }
+});
 
         // Function to display markers based on the provided data
         function displayMarkers(hospitals) {

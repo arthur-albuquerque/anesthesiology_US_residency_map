@@ -51,7 +51,7 @@
             margin-right: 5px;
             font-weight: bold;
         }
-        #filter-form input, #color-form select {
+        #filter-form input, #filter-form select, #color-form select {
             padding: 5px;
             border: 1px solid #ccc;
             border-radius: 4px;
@@ -106,7 +106,6 @@
             margin-right: 5px;
             vertical-align: middle;
             border-radius: 50%;
-            background-color: #1f77b4;
         }
     </style>
 </head>
@@ -129,6 +128,22 @@
             <label for="wage-filter">Wage PGY1 (≥):</label>
             <input type="number" id="wage-filter" placeholder="e.g., 60000">
         </div>
+        <div>
+            <label for="j1-filter">J1:</label>
+            <select id="j1-filter">
+                <option value="">Any</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+            </select>
+        </div>
+        <div>
+            <label for="h1b-filter">H1B:</label>
+            <select id="h1b-filter">
+                <option value="">Any</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+            </select>
+        </div>
         <button onclick="applyFilters()">Apply Filters</button>
         <button id="clear-filters" onclick="clearFilters()">Clear Filters</button>
     </div>
@@ -141,19 +156,25 @@
                 <option value="Step 2CK min">Step 2CK Min</option>
                 <option value="Female">Female Residents</option>
                 <option value="wage PGY1">Wage PGY1</option>
+                <option value="J1">J1</option>
+                <option value="H1B">H1B</option>
             </select>
         </div>
     </div>
     <div id="map"></div>
     <div id="legend">
         <p><strong id="legend-title">No Color Legend</strong></p>
-        <p id="all-locations"><span class="color-box"></span> All Locations</p>
+        <p id="all-locations"><span class="color-box" style="background-color: #1f77b4;"></span> All Locations</p>
         <div id="gradient-container" style="display: none;">
             <div class="gradient-bar"></div>
             <div class="legend-labels" id="legend-range">
                 <span id="min-value">0</span>
                 <span id="max-value">86</span>
             </div>
+        </div>
+        <div id="binary-legend" style="display: none;">
+            <p><span class="color-box" style="background-color: #3B2667;"></span> No</p>
+            <p><span class="color-box" style="background-color: #F8C570;"></span> Yes</p>
         </div>
         <p id="na-legend" style="display: none;"><span class="color-box" style="background-color: #808080;"></span> N/A</p>
     </div>
@@ -242,6 +263,11 @@
         function getColor(value, field) {
             if (isNA(value) && field !== 'none') return '#808080'; // Gray for N/A when not "No Color"
             if (field === 'none') return '#1f77b4'; // Default blue for No Color
+            if (field === 'J1' || field === 'H1B') {
+                if (value === 'Yes') return '#F8C570'; // Yellow
+                if (value === 'No') return '#3B2667';  // Purple
+                return '#808080'; // Gray for N/A
+            }
             var min = fieldRanges[field].min;
             var max = fieldRanges[field].max;
             var normalized = (parseFloat(value) - min) / (max - min);
@@ -274,7 +300,9 @@
                                        `Step 2CK Min: ${hospital['Step 2CK min'] || 'N/A'}<br>` +
                                        `# IMG: ${hospital.IMG || 'N/A'}<br>` +
                                        `Female Residents: ${hospital.Female || 'N/A'}<br>` +
-                                       `Wage PGY1: $${hospital['wage PGY1'] || 'N/A'}<br>`;
+                                       `Wage PGY1: $${hospital['wage PGY1'] || 'N/A'}<br>` +
+                                       `J1: ${hospital.J1 || 'N/A'}<br>` +
+                                       `H1B: ${hospital.H1B || 'N/A'}<br>`;
 
                     // Determine marker color based on N/A status for the active filter (if any)
                     var markerColor = '#1f77b4'; // Default blue
@@ -313,6 +341,8 @@
             var imgFilter = parseFloat(document.getElementById('img-filter').value);
             var femaleFilter = parseFloat(document.getElementById('female-filter').value);
             var wageFilter = parseFloat(document.getElementById('wage-filter').value);
+            var j1Filter = document.getElementById('j1-filter').value;
+            var h1bFilter = document.getElementById('h1b-filter').value;
 
             // Determine the active filter field (use the first non-empty filter)
             var activeFilter = null;
@@ -324,6 +354,10 @@
                 activeFilter = { field: 'Female', value: femaleFilter };
             } else if (!isNaN(wageFilter)) {
                 activeFilter = { field: 'wage PGY1', value: wageFilter };
+            } else if (j1Filter) {
+                activeFilter = { field: 'J1', value: j1Filter };
+            } else if (h1bFilter) {
+                activeFilter = { field: 'H1B', value: h1bFilter };
             }
 
             // Filter hospitals, but keep those with N/A
@@ -332,13 +366,17 @@
                 var img = isNA(hospital.IMG) ? null : parseFloat(hospital.IMG);
                 var female = isNA(hospital.Female) ? null : parseFloat(hospital.Female);
                 var wage = isNA(hospital['wage PGY1']) ? null : parseFloat(hospital['wage PGY1']);
+                var j1 = hospital.J1;
+                var h1b = hospital.H1B;
 
                 var passesStep2ck = isNaN(step2ckFilter) || step2ck === null || step2ck >= step2ckFilter;
                 var passesImg = isNaN(imgFilter) || img === null || img >= imgFilter;
                 var passesFemale = isNaN(femaleFilter) || female === null || female >= femaleFilter;
                 var passesWage = isNaN(wageFilter) || wage === null || wage >= wageFilter;
+                var passesJ1 = !j1Filter || j1 === j1Filter || (isNA(j1) && j1Filter === '');
+                var passesH1B = !h1bFilter || h1b === h1bFilter || (isNA(h1b) && h1bFilter === '');
 
-                return passesStep2ck && passesImg && passesFemale && passesWage;
+                return passesStep2ck && passesImg && passesFemale && passesWage && passesJ1 && passesH1B;
             });
 
             displayMarkers(filteredHospitals, activeFilter);
@@ -350,6 +388,8 @@
             document.getElementById('img-filter').value = '';
             document.getElementById('female-filter').value = '';
             document.getElementById('wage-filter').value = '';
+            document.getElementById('j1-filter').value = '';
+            document.getElementById('h1b-filter').value = '';
             displayMarkers(hospitalData);
         }
 
@@ -365,15 +405,22 @@
             document.getElementById('legend-title').textContent = colorField === 'none' ? 'No Color Legend' : `${colorField} Legend`;
             var allLocations = document.getElementById('all-locations');
             var gradientContainer = document.getElementById('gradient-container');
+            var binaryLegend = document.getElementById('binary-legend');
             var naLegend = document.getElementById('na-legend');
             if (colorField === 'none') {
                 allLocations.style.display = 'block';
                 gradientContainer.style.display = 'none';
+                binaryLegend.style.display = 'none';
                 naLegend.style.display = 'none';
-                document.querySelector('.color-box').style.backgroundColor = '#1f77b4';
+            } else if (colorField === 'J1' || colorField === 'H1B') {
+                allLocations.style.display = 'none';
+                gradientContainer.style.display = 'none';
+                binaryLegend.style.display = 'block';
+                naLegend.style.display = 'block';
             } else {
                 allLocations.style.display = 'none';
                 gradientContainer.style.display = 'block';
+                binaryLegend.style.display = 'none';
                 naLegend.style.display = 'block';
                 document.getElementById('min-value').textContent = fieldRanges[colorField].min;
                 document.getElementById('max-value').textContent = fieldRanges[colorField].max;
